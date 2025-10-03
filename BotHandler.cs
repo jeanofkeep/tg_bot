@@ -37,6 +37,7 @@ namespace tg_bot.Handlers
         {
         new KeyboardButton[]{ "🎯My tasks", "📝Create task"},
         new KeyboardButton[]{ "🔙Back" }
+        //new KeyboardButton[]{ "🔙Back" }
     })
         {
             ResizeKeyboard = true
