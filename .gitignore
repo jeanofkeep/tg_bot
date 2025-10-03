@@ -1,0 +1,11 @@
+.env
+
+#Visual Studio
+.vs/
+*.user
+*.suo
+*.vssscc
+*.sln.docstates
+
+bin/
+obj/
