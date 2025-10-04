@@ -1,4 +1,5 @@
-﻿using System;
+﻿using DotNetEnv;
+using System;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,7 +16,6 @@ using tg_bot.Models;
 using tg_bot.Handlers;
 
 
-
 namespace tg_bot
 {
 
@@ -23,20 +23,29 @@ namespace tg_bot
     {
         static async Task Main()
         {
+
+            DotNetEnv.Env.Load("../../../.env");
+
+            var token = Environment.GetEnvironmentVariable("BOT_TOKEN");
+
+            Console.WriteLine($"Current directory: {Directory.GetCurrentDirectory()}");
+
             var options = new DbContextOptionsBuilder<BotDbContext>()
-                .UseNpgsql("Host=localhost;Port=5432;Database=telegram_bot;Username=postgres;Password=1234")
+                .UseNpgsql("Host=localhost;Port=5432;Database=telegram_bot;Username=postgres;Password=12345678")
                 .Options;
 
             using var db = new BotDbContext(options);
             db.Database.EnsureCreated();
 
-            DotNetEnv.Env.Load();
 
-            string token = Environment.GetEnvironmentVariable("BOT_TOKEN");
+            if (string.IsNullOrEmpty(token))
+            {
+                Console.WriteLine("BOT_TOKEN not found in .env file");
+                return;
 
+            }
             var bot = new TelegramBotClient(token);
 
-            //var me = await bot.GetMeAsync();
             var me = await bot.GetMeAsync();
 
             var handler = new BotHandlers(db);
@@ -49,14 +58,9 @@ namespace tg_bot
 
             Console.ReadLine();
 
-
         }
-
-
     }
 }
-
-
 
 
 //using var cts = new CancellationTokenSource();

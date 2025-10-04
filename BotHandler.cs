@@ -74,8 +74,6 @@ namespace tg_bot.Handlers
                 case "🔙Back":
                     await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
                     break;
-
-
             }
         }
 
