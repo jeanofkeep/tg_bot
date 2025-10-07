@@ -10,8 +10,9 @@ using tg_bot.Models;
 namespace tg_bot.Data
 {
     public class BotDbContext:DbContext
-    {   
-        public DbSet<MessageEntity> Message {  get; set; }
+    {
+        public DbSet<UserState> UserStates { get; set; }
+        public DbSet<UserMessage> UserMessages {  get; set; }
 
         public BotDbContext(DbContextOptions<BotDbContext> options)
             : base(options)
@@ -19,9 +20,13 @@ namespace tg_bot.Data
         }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<MessageEntity>()
+            modelBuilder.Entity<UserMessage>()
                 .HasKey(e => e.Id);
-        }
 
+
+            modelBuilder.Entity<UserState>()
+                .HasKey(e => e.Id);
+
+        }
     }
 }
