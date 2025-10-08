@@ -14,6 +14,7 @@ using tg_bot.Data;
 using tg_bot.Models;
 using static System.Net.Mime.MediaTypeNames;
 using Microsoft.Extensions.Options;
+using System.Text;
 //using Telegram.Bots.Types;
 
 namespace tg_bot.Handlers
@@ -100,7 +101,7 @@ namespace tg_bot.Handlers
             {
                 if (DateTime.TryParse(text, out DateTime parsedTime))
                 {
-                    var reminderDate = DateTime.Today.Add(parsedTime.TimeOfDay);
+                    var reminderDate = DateTime.Today.Add(parsedTime.TimeOfDay).ToUniversalTime();
                     _db.UserMessages.Add(new UserMessage
                     {
                         UserId = ChatId,
@@ -110,13 +111,17 @@ namespace tg_bot.Handlers
                     });
 
                     state.IsAwaitingTime = false;
+                    var savedTask = state.TempText;
                     state.TempText = null;
 
-                    await bot.SendTextMessageAsync(ChatId, "Task '{state.TempText}' on {reminderDate:t} saved", cancellationToken: ct);
+                    await _db.SaveChangesAsync(ct); 
+                    
+                    await bot.SendTextMessageAsync(ChatId, $"Task'{state.TempText}' on '{reminderDate:t}' saved", cancellationToken: ct);
                     //var taskText = state.TempText;
                     //var taskTime = text;
                 }
-
+                return;
+            }
                 switch (text)
                 {
                     case "/start":
@@ -125,7 +130,7 @@ namespace tg_bot.Handlers
 
                     case "📋Tasks":
                         await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
-                        break;
+                    break;
 
                     case "📝Create task":
                         await bot.SendTextMessageAsync(ChatId, "📝Create task:", cancellationToken: ct);
@@ -133,13 +138,32 @@ namespace tg_bot.Handlers
                         state.IsAwaitingTime = false;
                         state.TempText = null;
                         await _db.SaveChangesAsync(ct);
-                        break;
+                    break;
+
+                    case "🎯My tasks":
+
+                    var UserTask = _db.UserMessages
+                        .Where(x => x.UserId == ChatId)
+                        .OrderBy(m => m.Time)
+                        .ToList();
+                    if (UserTask.Count == 0)
+                    {
+                        await bot.SendTextMessageAsync(ChatId, "You dont have tasks", cancellationToken: ct);
+                    }
+                    else
+                    {
+                        var sb = new StringBuilder("Your tasks: \n\n");
+                        foreach (var task in UserTask)
+                        {
+                            sb.AppendLine($"*{task.Time:t}* - {task.Text}");
+                        }
+                        await bot.SendTextMessageAsync(ChatId, sb.ToString(), parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown, cancellationToken: ct);
+                    }
+                    break;
 
 
 
-
-
-                    case "Projects":
+                case "Projects":
                         await bot.SendTextMessageAsync(ChatId, "Projects:", replyMarkup: SectionProjects, cancellationToken: ct);
                         break;
 
@@ -147,7 +171,10 @@ namespace tg_bot.Handlers
                         await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
                         break;
 
-                    default:
+
+                    
+
+                default:
 
                         //await bot.SendTextMessageAsync(ChatId, $"✅ Задача '{taskText}' на {taskTime} сохранена.", cancellationToken: ct);
 
@@ -156,7 +183,7 @@ namespace tg_bot.Handlers
                         break;
                 }
             }
-        }
+        
         
 
         public Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct)
