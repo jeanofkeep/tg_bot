@@ -15,6 +15,7 @@ using tg_bot.Models;
 using static System.Net.Mime.MediaTypeNames;
 using Microsoft.Extensions.Options;
 using System.Text;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 //using Telegram.Bots.Types;
 
 namespace tg_bot.Handlers
@@ -49,7 +50,7 @@ namespace tg_bot.Handlers
 
         private static ReplyKeyboardMarkup SectionProjects = new(new[]
         {
-        new KeyboardButton[]{"Podrazdel1","Podrazdel2"},
+        new KeyboardButton[]{ "My Projects", "Create Projects"},
         new KeyboardButton[]{ "🔙Back" }
     })
         {
@@ -133,6 +134,10 @@ namespace tg_bot.Handlers
                         await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
                     break;
 
+                    case "Projects":
+                    await bot.SendTextMessageAsync(ChatId, "Projects", replyMarkup: SectionProjects, cancellationToken: ct);
+                    break;
+
                     case "📝Create task":
                         await bot.SendTextMessageAsync(ChatId, "📝Create task:", cancellationToken: ct);
                         state.IsAwaitingText = true;
@@ -162,24 +167,81 @@ namespace tg_bot.Handlers
                     }
                     break;
 
+                    if (state.IsAwaitingProject)
+                    {
+                        // Сохраняем проект
+                        _db.UserProjects.Add(new UserProject
+                        {
+                            UserId = ChatId,
+                            Text = text,
+                            
+                        });
+
+                        state.IsAwaitingProject = false;
+                        state.TempProject = null;
+                        await _db.SaveChangesAsync(ct);
+
+                        await bot.SendTextMessageAsync(ChatId, $"Project '{text}' saved!", cancellationToken: ct);
+                        return;
+                    }
+
+                    // --- внутри switch ---
+                    switch (text)
+                    {
+                        case "/start":
+                            await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
+                            break;
+
+                        case "Projects":
+                            await bot.SendTextMessageAsync(ChatId, "Projects:", replyMarkup: SectionProjects, cancellationToken: ct);
+                            break;
+
+                        case "Create projects":
+                            await bot.SendTextMessageAsync(ChatId, "Enter project name:", cancellationToken: ct);
+                            state.IsAwaitingProject = true;
+                            state.TempProject = null;
+                            await _db.SaveChangesAsync(ct);
+                            break;
+
+                        case "My Projects":
+                            var userProjects = _db.UserProjects
+                                .Where(p => p.UserId == ChatId)
+                                .OrderBy(p => p.Id)
+                                .ToList();
+
+                            if (userProjects.Count == 0)
+                            {
+                                await bot.SendTextMessageAsync(ChatId, "You don't have projects.", cancellationToken: ct);
+                            }
+                            else
+                            {
+                                var sb = new StringBuilder("Your projects:\n\n");
+                                foreach (var project in userProjects)
+                                {
+                                    sb.AppendLine($"- {project.Text}");
+                                }
+                                await bot.SendTextMessageAsync(ChatId, sb.ToString(), cancellationToken: ct);
+                            }
+                            break;
+
+                            // остальной switch...
+                    }
 
 
-                case "Projects":
-                        await bot.SendTextMessageAsync(ChatId, "Projects:", replyMarkup: SectionProjects, cancellationToken: ct);
-                        break;
+                
 
-                    case "🔙Back":
+                case "🔙Back":
                         await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
                         break;
 
 
                     
 
-                default:
+                    default:
 
                         //await bot.SendTextMessageAsync(ChatId, $"✅ Задача '{taskText}' на {taskTime} сохранена.", cancellationToken: ct);
 
-                        await bot.SendTextMessageAsync(ChatId, "Error", cancellationToken: ct);
+                        //await bot.SendTextMessageAsync(ChatId, "Error", cancellationToken: ct);
 
                         break;
                 }

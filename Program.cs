@@ -12,7 +12,6 @@ using Telegram.Bot.Types.ReplyMarkups;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using tg_bot.Data;
-//using tg_bot.Models;
 using tg_bot.Handlers;
 
 

@@ -17,7 +17,6 @@ namespace tg_bot.Models
         public DateTime Time { get; set; }
         public DateTime? ReminderDateTime { get; set; }
        
-
     }
 
     public class UserState
@@ -27,6 +26,20 @@ namespace tg_bot.Models
         public bool IsAwaitingText { get; set; }
         public bool IsAwaitingTime { get; set; }
         public string? TempText { get; set; }
+
+        public string TempProject { get; set; }
+        public bool IsAwaitingProject { get; set; } = false;
+        
+
+    }
+
+    public class UserProject
+    {
+        public int Id { get; set; }
+        public long UserId { get; set; }
+        public string? Username { get; set; }
+        public string Text { get; set; } = "";
+        public DateTime Date { get; set; }
 
     }
 }

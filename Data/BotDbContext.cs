@@ -14,12 +14,15 @@ namespace tg_bot.Data
         public DbSet<UserState> UserStates { get; set; }
         public DbSet<UserMessage> UserMessages {  get; set; }
 
-        public DbSet<UserReminder> UserReminders { get; set; }
+        //public DbSet<UserReminder> UserReminders { get; set; }
+
+        public DbSet<UserProject> UserProjects { get; set; }
 
         public BotDbContext(DbContextOptions<BotDbContext> options)
             : base(options)
         {
         }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<UserMessage>()
@@ -27,6 +30,9 @@ namespace tg_bot.Data
 
 
             modelBuilder.Entity<UserState>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<UserProject>()
                 .HasKey(e => e.Id);
 
         }
