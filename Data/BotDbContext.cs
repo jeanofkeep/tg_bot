@@ -14,6 +14,8 @@ namespace tg_bot.Data
         public DbSet<UserState> UserStates { get; set; }
         public DbSet<UserMessage> UserMessages {  get; set; }
 
+        public DbSet<UserReminder> UserReminders { get; set; }
+
         public BotDbContext(DbContextOptions<BotDbContext> options)
             : base(options)
         {

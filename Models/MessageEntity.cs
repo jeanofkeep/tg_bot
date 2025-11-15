@@ -16,6 +16,7 @@ namespace tg_bot.Models
         public DateTime Date { get; set; }
         public DateTime Time { get; set; }
         public DateTime? ReminderDateTime { get; set; }
+       
 
     }
 

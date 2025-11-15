@@ -83,6 +83,7 @@ namespace tg_bot.Handlers
                 };
 
                 _db.UserStates.Add(state);
+
                 await _db.SaveChangesAsync(ct);
             }
 
