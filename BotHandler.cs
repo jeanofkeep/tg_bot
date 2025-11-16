@@ -31,6 +31,227 @@ namespace tg_bot.Handlers
 
         private static ReplyKeyboardMarkup MainMenu = new(new[]
         {
+            new KeyboardButton[]{ "📋Tasks", "Projects","Norifications"}
+        })
+        {
+            ResizeKeyboard = true
+        };
+
+        private static ReplyKeyboardMarkup SectionTasks = new(new[]
+        {
+            new KeyboardButton[]{ "🎯My tasks", "📝Create task"},
+            new KeyboardButton[]{ "🔙Back" }
+        })
+        {
+            ResizeKeyboard = true
+        };
+
+        private static ReplyKeyboardMarkup SectionProjects = new(new[]
+        {
+            new KeyboardButton[]{ "My Projects", "Create projects"},
+            new KeyboardButton[]{ "🔙Back" }
+        })
+        {
+            ResizeKeyboard = true
+        };
+
+        public async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken ct)
+        {
+            if (update.Type != Telegram.Bot.Types.Enums.UpdateType.Message || update.Message == null)
+                return;
+
+            if (update.Message.Type != Telegram.Bot.Types.Enums.MessageType.Text)
+                return;
+
+            var ChatId = update.Message.Chat.Id;
+            var text = update.Message.Text;
+
+            var state = _db.UserStates.FirstOrDefault(s => s.UserId == ChatId);
+            if (state == null)
+            {
+                state = new UserState
+                {
+                    UserId = ChatId,
+                    IsAwaitingText = false,
+                    IsAwaitingTime = false,
+                    IsAwaitingProject = false,
+                    TempText = null,
+                    TempProject = null
+                };
+
+                _db.UserStates.Add(state);
+
+                await _db.SaveChangesAsync(ct);
+            }
+
+            // WAITING FOR TASK TEXT
+            if (state.IsAwaitingText)
+            {
+                state.TempText = text;
+                state.IsAwaitingText = false;
+                state.IsAwaitingTime = true;
+
+                await _db.SaveChangesAsync(ct);
+
+                await bot.SendTextMessageAsync(ChatId, "Enter the time:", cancellationToken: ct);
+                return;
+            }
+
+            // WAITING FOR TASK TIME
+            if (state.IsAwaitingTime)
+            {
+                if (DateTime.TryParse(text, out DateTime parsedTime))
+                {
+                    var reminderDate = DateTime.Today.Add(parsedTime.TimeOfDay).ToUniversalTime();
+
+                    _db.UserMessages.Add(new UserMessage
+                    {
+                        UserId = ChatId,
+                        Text = state.TempText,
+                        Time = reminderDate,
+                        ReminderDateTime = DateTime.UtcNow
+                    });
+
+                    var savedText = state.TempText;
+
+                    state.IsAwaitingTime = false;
+                    state.TempText = null;
+
+                    await _db.SaveChangesAsync(ct);
+
+                    await bot.SendTextMessageAsync(
+                        ChatId,
+                        $"Task '{savedText}' saved for {reminderDate:t}",
+                        cancellationToken: ct
+                    );
+                }
+
+                return;
+            }
+
+            // WAITING FOR PROJECT NAME
+            if (state.IsAwaitingProject)
+            {
+                _db.UserProjects.Add(new UserProject
+                {
+                    UserId = ChatId,
+                    Text = text
+                });
+
+                state.IsAwaitingProject = false;
+                state.TempProject = null;
+
+                await _db.SaveChangesAsync(ct);
+
+                await bot.SendTextMessageAsync(ChatId, $"Project '{text}' saved!", cancellationToken: ct);
+                return;
+            }
+
+            // MAIN SWITCH
+            switch (text)
+            {
+                case "/start":
+                    await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
+                    break;
+
+                case "📋Tasks":
+                    await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
+                    break;
+
+                case "📝Create task":
+                    await bot.SendTextMessageAsync(ChatId, "📝Create task:", cancellationToken: ct);
+                    state.IsAwaitingText = true;
+                    state.IsAwaitingTime = false;
+                    state.TempText = null;
+                    await _db.SaveChangesAsync(ct);
+                    break;
+
+                case "🎯My tasks":
+                    var userTasks = _db.UserMessages
+                        .Where(x => x.UserId == ChatId)
+                        .OrderBy(m => m.Time)
+                        .ToList();
+
+                    if (userTasks.Count == 0)
+                    {
+                        await bot.SendTextMessageAsync(ChatId, "You don't have tasks", cancellationToken: ct);
+                    }
+                    else
+                    {
+                        var sb = new StringBuilder("Your tasks:\n\n");
+                        foreach (var task in userTasks)
+                            sb.AppendLine($"[*{task.Time:t}*] - {task.Text}");
+
+                        await bot.SendTextMessageAsync(ChatId, sb.ToString(),
+                            parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown, cancellationToken: ct);
+                    }
+
+                    break;
+
+                case "Projects":
+                    await bot.SendTextMessageAsync(ChatId, "Projects", replyMarkup: SectionProjects, cancellationToken: ct);
+                    break;
+
+                case "Create projects":
+                    await bot.SendTextMessageAsync(ChatId, "Enter project name:", cancellationToken: ct);
+                    state.IsAwaitingProject = true;
+                    state.TempProject = null;
+                    await _db.SaveChangesAsync(ct);
+                    break;
+
+                case "My Projects":
+                    var userProjects = _db.UserProjects
+                        .Where(p => p.UserId == ChatId)
+                        .OrderBy(p => p.Id)
+                        .ToList();
+
+                    if (!userProjects.Any())
+                    {
+                        await bot.SendTextMessageAsync(ChatId, "You don't have projects.", cancellationToken: ct);
+                    }
+                    else
+                    {
+                        var sb = new StringBuilder("Your projects:\n\n");
+                        foreach (var p in userProjects)
+                            sb.AppendLine($"- {p.Text}");
+
+                        await bot.SendTextMessageAsync(ChatId, sb.ToString(), cancellationToken: ct);
+                    }
+                    break;
+
+                case "🔙Back":
+                    await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
+                    break;
+
+                default:
+                    await bot.SendTextMessageAsync(ChatId, "Unknown command", cancellationToken: ct);
+                    break;
+            }
+        }
+
+        public Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+            return Task.CompletedTask;
+        }
+    }
+}
+
+
+/*
+namespace tg_bot.Handlers
+{
+    public class BotHandlers
+    {
+        private readonly BotDbContext _db;
+
+        public BotHandlers(BotDbContext db)
+        {
+            _db = db;
+        }
+
+        private static ReplyKeyboardMarkup MainMenu = new(new[]
+        {
         new KeyboardButton[]{ "📋Tasks", "Projects","Norifications"},
 		//new KeyboardButton[]{"Exit" }
 	})
@@ -116,37 +337,52 @@ namespace tg_bot.Handlers
                     var savedTask = state.TempText;
                     state.TempText = null;
 
-                    await _db.SaveChangesAsync(ct); 
-                    
+                    await _db.SaveChangesAsync(ct);
+
                     await bot.SendTextMessageAsync(ChatId, $"Task'{state.TempText}' on '{reminderDate:t}' saved", cancellationToken: ct);
                     //var taskText = state.TempText;
                     //var taskTime = text;
                 }
                 return;
             }
-                switch (text)
+
+            if (state.IsAwaitingProject)
+            {
+                // Сохраняем проект
+                _db.UserProjects.Add(new UserProject
                 {
-                    case "/start":
-                        await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
-                        break;
+                    UserId = ChatId,
+                    Text = text,
 
-                    case "📋Tasks":
-                        await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
+                });
+
+                state.IsAwaitingProject = false;
+                state.TempProject = null;
+                await _db.SaveChangesAsync(ct);
+
+                await bot.SendTextMessageAsync(ChatId, $"Project '{text}' saved!", cancellationToken: ct);
+                return;
+            }
+
+            switch (text)
+            {
+                case "/start":
+                    await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
                     break;
 
-                    case "Projects":
-                    await bot.SendTextMessageAsync(ChatId, "Projects", replyMarkup: SectionProjects, cancellationToken: ct);
+                case "📋Tasks":
+                    await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
                     break;
 
-                    case "📝Create task":
-                        await bot.SendTextMessageAsync(ChatId, "📝Create task:", cancellationToken: ct);
-                        state.IsAwaitingText = true;
-                        state.IsAwaitingTime = false;
-                        state.TempText = null;
-                        await _db.SaveChangesAsync(ct);
+                case "📝Create task":
+                    await bot.SendTextMessageAsync(ChatId, "📝Create task:", cancellationToken: ct);
+                    state.IsAwaitingText = true;
+                    state.IsAwaitingTime = false;
+                    state.TempText = null;
+                    await _db.SaveChangesAsync(ct);
                     break;
 
-                    case "🎯My tasks":
+                case "🎯My tasks":
 
                     var UserTask = _db.UserMessages
                         .Where(x => x.UserId == ChatId)
@@ -161,81 +397,48 @@ namespace tg_bot.Handlers
                         var sb = new StringBuilder("Your tasks: \n\n");
                         foreach (var task in UserTask)
                         {
-                            sb.AppendLine($"*{task.Time:t}* - {task.Text}");
+                            sb.AppendLine($"[*{task.Time:t}*] - {task.Text}");
                         }
                         await bot.SendTextMessageAsync(ChatId, sb.ToString(), parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown, cancellationToken: ct);
                     }
                     break;
 
-                    if (state.IsAwaitingProject)
+                case "Projects":
+                    await bot.SendTextMessageAsync(ChatId, "Projects", replyMarkup: SectionProjects, cancellationToken: ct);
+                    break;
+
+                case "Create projects":
+                    await bot.SendTextMessageAsync(ChatId, "Enter project name:", cancellationToken: ct);
+                    state.IsAwaitingProject = true;
+                    state.TempProject = null;
+                    await _db.SaveChangesAsync(ct);
+                    break;
+
+                case "My Projects":
+                    var userProjects = _db.UserProjects
+                        .Where(p => p.UserId == ChatId)
+                        .OrderBy(p => p.Id)
+                        .ToList();
+
+                    if (userProjects.Count == 0)
                     {
-                        // Сохраняем проект
-                        _db.UserProjects.Add(new UserProject
+                        await bot.SendTextMessageAsync(ChatId, "You don't have projects.", cancellationToken: ct);
+                    }
+                    else
+                    {
+                        var sb = new StringBuilder("Your projects:\n\n");
+                        foreach (var project in userProjects)
                         {
-                            UserId = ChatId,
-                            Text = text,
-                            
-                        });
-
-                        state.IsAwaitingProject = false;
-                        state.TempProject = null;
-                        await _db.SaveChangesAsync(ct);
-
-                        await bot.SendTextMessageAsync(ChatId, $"Project '{text}' saved!", cancellationToken: ct);
-                        return;
+                            sb.AppendLine($"- {project.Text}");
+                        }
+                        await bot.SendTextMessageAsync(ChatId, sb.ToString(), cancellationToken: ct);
                     }
-
-                    // --- внутри switch ---
-                    switch (text)
-                    {
-                        case "/start":
-                            await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
-                            break;
-
-                        case "Projects":
-                            await bot.SendTextMessageAsync(ChatId, "Projects:", replyMarkup: SectionProjects, cancellationToken: ct);
-                            break;
-
-                        case "Create projects":
-                            await bot.SendTextMessageAsync(ChatId, "Enter project name:", cancellationToken: ct);
-                            state.IsAwaitingProject = true;
-                            state.TempProject = null;
-                            await _db.SaveChangesAsync(ct);
-                            break;
-
-                        case "My Projects":
-                            var userProjects = _db.UserProjects
-                                .Where(p => p.UserId == ChatId)
-                                .OrderBy(p => p.Id)
-                                .ToList();
-
-                            if (userProjects.Count == 0)
-                            {
-                                await bot.SendTextMessageAsync(ChatId, "You don't have projects.", cancellationToken: ct);
-                            }
-                            else
-                            {
-                                var sb = new StringBuilder("Your projects:\n\n");
-                                foreach (var project in userProjects)
-                                {
-                                    sb.AppendLine($"- {project.Text}");
-                                }
-                                await bot.SendTextMessageAsync(ChatId, sb.ToString(), cancellationToken: ct);
-                            }
-                            break;
-
-                            // остальной switch...
-                    }
-
-
-                
+                    break;
 
                 case "🔙Back":
-                        await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
-                        break;
-
-
-                    
+                     await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
+                     break;
+ 
 
                     default:
 
@@ -257,3 +460,4 @@ namespace tg_bot.Handlers
 
     }
 }
+*/

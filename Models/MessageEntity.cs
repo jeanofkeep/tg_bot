@@ -27,7 +27,7 @@ namespace tg_bot.Models
         public bool IsAwaitingTime { get; set; }
         public string? TempText { get; set; }
 
-        public string TempProject { get; set; }
+        public string? TempProject { get; set; }
         public bool IsAwaitingProject { get; set; } = false;
         
 
