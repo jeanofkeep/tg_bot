@@ -148,121 +148,195 @@ namespace tg_bot.Handlers
                 return;
             }
 
-            // MAIN SWITCH
-            switch (text)
+            if (state.IsAwaitingTaskDelete)
             {
-                case "/start":
-                    await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
-                    break;
-
-                case "📋Tasks":
-                    await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
-                    break;
-
-                case "📝Create task":
-                    await bot.SendTextMessageAsync(ChatId, "📝Create task:", cancellationToken: ct);
-                    state.IsAwaitingText = true;
-                    state.IsAwaitingTime = false;
-                    state.TempText = null;
-                    await _db.SaveChangesAsync(ct);
-                    break;
-
-                case "🎯My tasks":
-                    var userTasks = _db.UserMessages
-                        .Where( x => x.UserId == ChatId)
-                        .OrderByDescending(m => m.Time)
+                if (int.TryParse(text, out int taskNumber))
+                {
+                    var tasks = _db.UserMessages
+                        .Where(x => x.UserId == ChatId)
+                        .OrderByDescending(x => x.Time)
                         .ToList();
 
-                    for(int i = 0; i < userTasks.Count; i++)
-                    {
-                        userTasks[i].TaskId = i + 1;
-                    }
-                    await _db.SaveChangesAsync(ct);
-
-                    if (userTasks.Count == 0)
-                    {
-                        await bot.SendTextMessageAsync(ChatId, "You don't have tasks", cancellationToken: ct);
-                    }
-                    else
-                    {
-                        var sb = new StringBuilder("Your tasks:\n\n");
-                        foreach (var task in userTasks)
-                            sb.AppendLine($"{task.TaskId}.*[{task.Time:t}]* - {task.Text}");
-
-                        await bot.SendTextMessageAsync(ChatId, sb.ToString(),
-                            parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown, cancellationToken: ct);
-                    }
-
-                    break;
-
-                case "Projects":
-                    await bot.SendTextMessageAsync(ChatId, "Projects", replyMarkup: SectionProjects, cancellationToken: ct);
-                    break;
-
-                case "Create projects":
-                    await bot.SendTextMessageAsync(ChatId, "Enter project name:", cancellationToken: ct);
-                    state.IsAwaitingProject = true;
-                    state.TempProject = null;
-                    await _db.SaveChangesAsync(ct);
-                    break;
-
-                case "My Projects":
-                    var userProjects = _db.UserProjects
-                        .Where(p => p.UserId == ChatId)
-                        .OrderBy(p => p.Id)
-                        .ToList();
-
-                    if (!userProjects.Any())
-                    {
-                        await bot.SendTextMessageAsync(ChatId, "You don't have projects.", cancellationToken: ct);
-                    }
-                    else
-                    {
-                        var sb = new StringBuilder("Your projects:\n\n");
-                        foreach (var p in userProjects)
-                            sb.AppendLine($"{p.Id}.{p.Text}");
-
-                        await bot.SendTextMessageAsync(ChatId, sb.ToString(), cancellationToken: ct);
-                    }
-                    break;
-
-                case "🔙Back":
-                    await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
-                    break;
-
-                case "❌Delete task":
-                    await bot.SendTextMessageAsync(ChatId, "Enter the number task for deleting:", cancellationToken: ct);
-                    var deletingTask = _db.UserMessages
-                        .FirstOrDefault(x => x.UserId == ChatId);
-
-
-                    if (deletingTask != null)
-                    {
-                      _db.UserMessages.Remove(deletingTask);
-                    await _db.SaveChangesAsync(ct);
-                    }
-
-                    /*
                     if (taskNumber >= 1 && taskNumber <= tasks.Count)
                     {
                         var taskToDelete = tasks[taskNumber - 1];
-                       _db.UserMessages.Remove(taskToDelete);
+
+                        _db.UserMessages.Remove(taskToDelete);
                         await _db.SaveChangesAsync(ct);
 
+                        // отключаем состояние
                         state.IsAwaitingTaskDelete = false;
                         await _db.SaveChangesAsync(ct);
 
-                        await bot.SendTextMessageAsync(ChatId, "Task deleted successfully!", cancellationToken: ct);
+                        await bot.SendTextMessageAsync(ChatId,
+                            "Task deleted successfully!",
+                            cancellationToken: ct);
                     }
-                    */
+                    else
+                    {
+                        await bot.SendTextMessageAsync(ChatId,
+                            "Invalid task number.",
+                            cancellationToken: ct);
+                    }
+                }
+                else
+                {
+                    await bot.SendTextMessageAsync(ChatId,
+                        "Please enter a valid number.",
+                        cancellationToken: ct);
+                }
+            }
+                if (state.IsAwaitingProjectDelete)
+                {
+                    if (int.TryParse(text, out int projectNumber))
+                    {
+                        var projects = _db.UserProjects
+                            .Where(x => x.UserId == ChatId)
+                            .OrderBy(x => x.ProjectId)
+                            .ToList();
 
+                        if (projectNumber >= 1 && projectNumber <= projects.Count)
+                        {
+                            var projectToDelete = projects[projectNumber - 1];
+
+                            _db.UserProjects.Remove(projectToDelete);
+                            await _db.SaveChangesAsync(ct);
+
+                            // отключаем состояние
+                            state.IsAwaitingProjectDelete = false;
+                            await _db.SaveChangesAsync(ct);
+
+                            await bot.SendTextMessageAsync(ChatId,
+                                "Project deleted successfully!",
+                                cancellationToken: ct);
+                        }
+                        else
+                        {
+                            await bot.SendTextMessageAsync(ChatId,
+                                "Invalid project number.",
+                                cancellationToken: ct);
+                        }
+                    }
+                    else
+                    {
+                        await bot.SendTextMessageAsync(ChatId,
+                            "Please enter a valid number.",
+                            cancellationToken: ct);
+                    }
+
+
+                }
+
+                // MAIN SWITCH
+                switch (text)
+                {
+                    case "/start":
+                        await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
+                        break;
+
+                    case "📋Tasks":
+                        await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
+                        break;
+
+                    case "📝Create task":
+                        await bot.SendTextMessageAsync(ChatId, "📝Create task:", cancellationToken: ct);
+                        state.IsAwaitingText = true;
+                        state.IsAwaitingTime = false;
+                        state.TempText = null;
+                        await _db.SaveChangesAsync(ct);
+                        break;
+
+                    case "🎯My tasks":
+                        var userTasks = _db.UserMessages
+                            .Where(x => x.UserId == ChatId)
+                            .OrderByDescending(m => m.Time)
+                            .ToList();
+
+                        for (int i = 0; i < userTasks.Count; i++)
+                        {
+                            userTasks[i].TaskId = i + 1;
+                        }
+                        await _db.SaveChangesAsync(ct);
+
+                        if (userTasks.Count == 0)
+                        {
+                            await bot.SendTextMessageAsync(ChatId, "You don't have tasks", cancellationToken: ct);
+                        }
+                        else
+                        {
+                            var sb = new StringBuilder("Your tasks:\n\n");
+                            foreach (var task in userTasks)
+                                sb.AppendLine($"{task.TaskId}.*[{task.Time:t}]* - {task.Text}");
+
+                            await bot.SendTextMessageAsync(ChatId, sb.ToString(),
+                                parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown, cancellationToken: ct);
+                        }
+
+                        break;
+
+                    case "Projects":
+                        await bot.SendTextMessageAsync(ChatId, "Projects", replyMarkup: SectionProjects, cancellationToken: ct);
+                            
+                    break;
+
+                    case "Create projects":
+                        await bot.SendTextMessageAsync(ChatId, "Enter project name:", cancellationToken: ct);
+                        state.IsAwaitingProject = true;
+                        state.TempProject = null;
+                        await _db.SaveChangesAsync(ct);
+                        break;
+
+                    case "My Projects":
+                        var userProjects = _db.UserProjects
+                            .Where(p => p.UserId == ChatId)
+                            .OrderBy(p => p.Id)
+                            .ToList();
+                        for (int i = 0; i < userProjects.Count; i++)
+                        {
+                            userProjects[i].ProjectId = i + 1;
+                        }
+                        await _db.SaveChangesAsync(ct);
+
+                        if (!userProjects.Any())
+                        {
+                            await bot.SendTextMessageAsync(ChatId, "You don't have projects.", cancellationToken: ct);
+                        }
+                        else
+                        {
+                            var sb = new StringBuilder("Your projects:\n\n");
+                            foreach (var p in userProjects)
+                                sb.AppendLine($"{p.ProjectId}.{p.Text}");
+
+                            await bot.SendTextMessageAsync(ChatId, sb.ToString(), cancellationToken: ct);
+                        }
+                        break;
+
+                    case "🔙Back":
+                        await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
+                        break;
+
+                    case "❌Delete task":
+                        await bot.SendTextMessageAsync(ChatId, "Enter the number task for deleting:", cancellationToken: ct);
+                        var deletingTask = _db.UserMessages
+                            .All(x => x.UserId == ChatId);
+                        state.IsAwaitingTaskDelete = true;
+                        await _db.SaveChangesAsync(ct);
+                        break;
+
+                case "❌Delete project":
+                    await bot.SendTextMessageAsync(ChatId, "Enter the number project for deleting:", cancellationToken: ct);
+                    var deletingProject = _db.UserMessages
+                        .All(x => x.UserId == ChatId);
+                    state.IsAwaitingProjectDelete = true;
+                    await _db.SaveChangesAsync(ct);
                     break;
 
                 default:
-                    await bot.SendTextMessageAsync(ChatId, "Unknown command", cancellationToken: ct);
-                    break;
+                        await bot.SendTextMessageAsync(ChatId, "Unknown command", cancellationToken: ct);
+                        break;
+                }
             }
-        }
+        
 
         public Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct)
         {

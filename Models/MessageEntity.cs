@@ -29,6 +29,9 @@ namespace tg_bot.Models
         public string? TempText { get; set; }
         public string? TempProject { get; set; }
         public bool IsAwaitingProject { get; set; } = false;
+        public bool IsAwaitingTaskDelete { get; set; }
+        public bool IsAwaitingProjectDelete { get; set; }
+
     }
 
     public class UserProject
