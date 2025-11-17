@@ -39,7 +39,7 @@ namespace tg_bot.Handlers
 
         private static ReplyKeyboardMarkup SectionTasks = new(new[]
         {
-            new KeyboardButton[]{ "🎯My tasks", "📝Create task"},
+            new KeyboardButton[]{ "🎯My tasks", "📝Create task", "❌Delete task"},
             new KeyboardButton[]{ "🔙Back" }
         })
         {
@@ -48,7 +48,7 @@ namespace tg_bot.Handlers
 
         private static ReplyKeyboardMarkup SectionProjects = new(new[]
         {
-            new KeyboardButton[]{ "My Projects", "Create projects"},
+            new KeyboardButton[]{ "My Projects", "Create projects", "❌Delete project"},
             new KeyboardButton[]{ "🔙Back" }
         })
         {
@@ -64,6 +64,7 @@ namespace tg_bot.Handlers
                 return;
 
             var ChatId = update.Message.Chat.Id;
+            var TaskId = update.Message.Chat.Id;
             var text = update.Message.Text;
 
             var state = _db.UserStates.FirstOrDefault(s => s.UserId == ChatId);
@@ -168,9 +169,15 @@ namespace tg_bot.Handlers
 
                 case "🎯My tasks":
                     var userTasks = _db.UserMessages
-                        .Where(x => x.UserId == ChatId)
-                        .OrderBy(m => m.Time)
+                        .Where( x => x.UserId == ChatId)
+                        .OrderByDescending(m => m.Time)
                         .ToList();
+
+                    for(int i = 0; i < userTasks.Count; i++)
+                    {
+                        userTasks[i].TaskId = i + 1;
+                    }
+                    await _db.SaveChangesAsync(ct);
 
                     if (userTasks.Count == 0)
                     {
@@ -180,7 +187,7 @@ namespace tg_bot.Handlers
                     {
                         var sb = new StringBuilder("Your tasks:\n\n");
                         foreach (var task in userTasks)
-                            sb.AppendLine($"[*{task.Time:t}*] - {task.Text}");
+                            sb.AppendLine($"{task.TaskId}.*[{task.Time:t}]* - {task.Text}");
 
                         await bot.SendTextMessageAsync(ChatId, sb.ToString(),
                             parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown, cancellationToken: ct);
@@ -213,7 +220,7 @@ namespace tg_bot.Handlers
                     {
                         var sb = new StringBuilder("Your projects:\n\n");
                         foreach (var p in userProjects)
-                            sb.AppendLine($"- {p.Text}");
+                            sb.AppendLine($"{p.Id}.{p.Text}");
 
                         await bot.SendTextMessageAsync(ChatId, sb.ToString(), cancellationToken: ct);
                     }
@@ -221,6 +228,34 @@ namespace tg_bot.Handlers
 
                 case "🔙Back":
                     await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
+                    break;
+
+                case "❌Delete task":
+                    await bot.SendTextMessageAsync(ChatId, "Enter the number task for deleting:", cancellationToken: ct);
+                    var deletingTask = _db.UserMessages
+                        .FirstOrDefault(x => x.UserId == ChatId);
+
+
+                    if (deletingTask != null)
+                    {
+                      _db.UserMessages.Remove(deletingTask);
+                    await _db.SaveChangesAsync(ct);
+                    }
+
+                    /*
+                    if (taskNumber >= 1 && taskNumber <= tasks.Count)
+                    {
+                        var taskToDelete = tasks[taskNumber - 1];
+                       _db.UserMessages.Remove(taskToDelete);
+                        await _db.SaveChangesAsync(ct);
+
+                        state.IsAwaitingTaskDelete = false;
+                        await _db.SaveChangesAsync(ct);
+
+                        await bot.SendTextMessageAsync(ChatId, "Task deleted successfully!", cancellationToken: ct);
+                    }
+                    */
+
                     break;
 
                 default:
