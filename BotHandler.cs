@@ -31,7 +31,7 @@ namespace tg_bot.Handlers
 
         private static ReplyKeyboardMarkup MainMenu = new(new[]
         {
-            new KeyboardButton[]{ "📋Tasks", "Projects","Norifications"}
+            new KeyboardButton[]{ "📋Tasks", "📁Projects", "🔔Notifications" }
         })
         {
             ResizeKeyboard = true
@@ -48,7 +48,16 @@ namespace tg_bot.Handlers
 
         private static ReplyKeyboardMarkup SectionProjects = new(new[]
         {
-            new KeyboardButton[]{ "My Projects", "Create projects", "❌Delete project"},
+            new KeyboardButton[]{ "📒My Projects", "➕Create projects", "❌Delete project"},
+            new KeyboardButton[]{ "🔙Back" }
+        })
+        {
+            ResizeKeyboard = true
+        };
+
+        private static ReplyKeyboardMarkup SectionNotifications = new (new[]
+        {
+            new KeyboardButton[]{ "On", "Off"},
             new KeyboardButton[]{ "🔙Back" }
         })
         {
@@ -185,6 +194,7 @@ namespace tg_bot.Handlers
                         "Please enter a valid number.",
                         cancellationToken: ct);
                 }
+                return;
             }
                 if (state.IsAwaitingProjectDelete)
                 {
@@ -223,7 +233,7 @@ namespace tg_bot.Handlers
                             "Please enter a valid number.",
                             cancellationToken: ct);
                     }
-
+                return;
 
                 }
 
@@ -235,7 +245,7 @@ namespace tg_bot.Handlers
                         break;
 
                     case "📋Tasks":
-                        await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
+                        await bot.SendTextMessageAsync(ChatId, "📋Your Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
                         break;
 
                     case "📝Create task":
@@ -274,19 +284,19 @@ namespace tg_bot.Handlers
 
                         break;
 
-                    case "Projects":
-                        await bot.SendTextMessageAsync(ChatId, "Projects", replyMarkup: SectionProjects, cancellationToken: ct);
+                    case "📁Projects":
+                        await bot.SendTextMessageAsync(ChatId, "📁Projects", replyMarkup: SectionProjects, cancellationToken: ct);
                             
                     break;
 
-                    case "Create projects":
+                    case "➕Create projects":
                         await bot.SendTextMessageAsync(ChatId, "Enter project name:", cancellationToken: ct);
                         state.IsAwaitingProject = true;
                         state.TempProject = null;
                         await _db.SaveChangesAsync(ct);
                         break;
 
-                    case "My Projects":
+                    case "📒My Projects":
                         var userProjects = _db.UserProjects
                             .Where(p => p.UserId == ChatId)
                             .OrderBy(p => p.Id)
@@ -316,20 +326,31 @@ namespace tg_bot.Handlers
                         break;
 
                     case "❌Delete task":
-                        await bot.SendTextMessageAsync(ChatId, "Enter the number task for deleting:", cancellationToken: ct);
+                    state.IsAwaitingTaskDelete = true;
+                    await bot.SendTextMessageAsync(ChatId, "Enter the number task for deleting:", cancellationToken: ct);
                         var deletingTask = _db.UserMessages
                             .All(x => x.UserId == ChatId);
-                        state.IsAwaitingTaskDelete = true;
+                        //state.IsAwaitingTaskDelete = true;
                         await _db.SaveChangesAsync(ct);
                         break;
 
                 case "❌Delete project":
+                    state.IsAwaitingProjectDelete = true;
                     await bot.SendTextMessageAsync(ChatId, "Enter the number project for deleting:", cancellationToken: ct);
                     var deletingProject = _db.UserMessages
                         .All(x => x.UserId == ChatId);
-                    state.IsAwaitingProjectDelete = true;
+                    //state.IsAwaitingProjectDelete = true;
                     await _db.SaveChangesAsync(ct);
                     break;
+
+                case "🔔Notifications":
+                    await bot.SendTextMessageAsync(ChatId, "🚧This section is under development 🚧", replyMarkup: SectionNotifications, cancellationToken: ct);
+
+                    break;
+
+                //case "On":
+                    //await bot.SendTextMessageAsync(ChatId, "🚧This section is under development 🚧", replyMarkup: MainMenu, cancellationToken: ct);
+                    //break;
 
                 default:
                         await bot.SendTextMessageAsync(ChatId, "Unknown command", cancellationToken: ct);
