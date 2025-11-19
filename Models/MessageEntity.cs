@@ -31,6 +31,7 @@ namespace tg_bot.Models
         public bool IsAwaitingProject { get; set; } = false;
         public bool IsAwaitingTaskDelete { get; set; }
         public bool IsAwaitingProjectDelete { get; set; }
+        public string CurrentSection { get; set; } = null!;
 
     }
 
