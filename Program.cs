@@ -30,8 +30,10 @@ namespace tg_bot
             Console.WriteLine($"Current directory: {Directory.GetCurrentDirectory()}");
 
             var options = new DbContextOptionsBuilder<BotDbContext>()
-                .UseNpgsql("Host=localhost;Port=5432;Database=telegram_bot;Username=postgres;Password=12345678")
+                .UseNpgsql(Environment.GetEnvironmentVariable("BOT_DB"))
                 .Options;
+
+            
 
             using var db = new BotDbContext(options);
 
