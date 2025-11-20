@@ -106,11 +106,11 @@ namespace tg_bot.Handlers
                 switch (state.CurrentSection)
                 {
                     case "Projects":
-                        await bot.SendTextMessageAsync(ChatId, "Projects:", replyMarkup: SectionProjects);
+                        await bot.SendTextMessageAsync(ChatId, "📁Projects", replyMarkup: SectionProjects);
                      return;
 
                     case "Tasks":
-                        await bot.SendTextMessageAsync(ChatId, "Tasks:", replyMarkup: SectionTasks);
+                        await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks);
                     return;
 
                     //case "Notifications":
@@ -118,7 +118,7 @@ namespace tg_bot.Handlers
                     //return;
 
                     default:
-                        await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu);
+                        await bot.SendTextMessageAsync(ChatId, "Main menu", replyMarkup: MainMenu);
                         return;
                 }
                 
@@ -308,7 +308,7 @@ namespace tg_bot.Handlers
                     //await bot.SendTextMessageAsync(ChatId, "📁Projects", replyMarkup: SectionProjects, cancellationToken: ct);
                     //return;
                 //}
-                //return;
+                return;
 
                 }
                 
@@ -324,7 +324,7 @@ namespace tg_bot.Handlers
                         state.CurrentSection = "Tasks";
                         await _db.SaveChangesAsync(ct);
 
-                        await bot.SendTextMessageAsync(ChatId, "📋Your Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
+                        await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
                         return;
 
                     case "📝Create task":
