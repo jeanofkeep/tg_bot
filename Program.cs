@@ -1,4 +1,4 @@
-﻿using DotNetEnv;
+using DotNetEnv;
 using System;
 using System.Data;
 using System.Threading;
@@ -23,14 +23,14 @@ namespace tg_bot
         static async Task Main()
         {
 
-            DotNetEnv.Env.Load("../../../.env");
+            DotNetEnv.Env.Load(".env");
 
             var token = Environment.GetEnvironmentVariable("BOT_TOKEN");
 
             Console.WriteLine($"Current directory: {Directory.GetCurrentDirectory()}");
 
             var options = new DbContextOptionsBuilder<BotDbContext>()
-                .UseNpgsql(Environment.GetEnvironmentVariable("BOT_DB"))
+                .UseNpgsql(Environment.GetEnvironmentVariable("DB_CONNECTION"))
                 .Options;
 
             
@@ -59,10 +59,10 @@ namespace tg_bot
             Console.WriteLine($"Bot @{me.Username} started!");
 
             Console.ReadLine();
+            await Task.Delay(-1);
 
         }
     }
 }
-
 
 
