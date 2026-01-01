@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Design;
 
 namespace tg_bot.Data
 {
-
+    /*
         public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<BotDbContext>
         {
             public BotDbContext CreateDbContext(string[] args)
@@ -20,4 +20,5 @@ namespace tg_bot.Data
                 return new BotDbContext(optionsBuilder.Options);
             }
         }
+    */
 }

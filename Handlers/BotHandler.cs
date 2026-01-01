@@ -12,12 +12,16 @@ using Telegram.Bot.Types.ReplyMarkups;
 using Microsoft.EntityFrameworkCore;
 using tg_bot.Data;
 using tg_bot.Models;
+using static tg_bot.Keyboards.MainKeyboards;
 using static System.Net.Mime.MediaTypeNames;
 using Microsoft.Extensions.Options;
 using System.Text;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using System.ComponentModel.Design;
 using System.Threading.Channels;
+using tg_bot.State;
+using StackExchange.Redis;
+using tg_bot.Services;
 //using Telegram.Bots.Types;
 
 namespace tg_bot.Handlers
@@ -26,56 +30,14 @@ namespace tg_bot.Handlers
     {
         private readonly BotDbContext _db;
 
-        public BotHandlers(BotDbContext db)
+        private readonly RedisService _redis;
+
+        public BotHandlers(BotDbContext db, RedisService redis)
         {
             _db = db;
+            _redis = redis;
         }
 
-        private static ReplyKeyboardMarkup MainMenu = new(new[]
-        {
-            new KeyboardButton[]{ "📋Tasks", "📁Projects", "🔔Notifications" }
-        })
-        {
-            ResizeKeyboard = true
-        };
-
-        private static ReplyKeyboardMarkup SectionTasks = new(new[]
-        {
-            new KeyboardButton[]{ "🎯My tasks", "📝Create task", "❌Delete task"},
-            new KeyboardButton[]{ "🔙Back" }
-        })
-        {
-            ResizeKeyboard = true
-        };
-
-        private static ReplyKeyboardMarkup SectionProjects = new(new[]
-        {
-            new KeyboardButton[]{ "📒My Projects", "➕Create projects", "❌Delete project"},
-            new KeyboardButton[]{ "🔙Back" }
-        })
-        {
-            ResizeKeyboard = true
-        };
-
-        private static ReplyKeyboardMarkup SectionNotifications = new (new[]
-        {
-            new KeyboardButton[]{ "On", "Off"},
-            new KeyboardButton[]{ "🔙Back" }
-        })
-        {
-            ResizeKeyboard = true
-        };
-
-        private static ReplyKeyboardMarkup cancelKeyboardMarkup = new(new[]
-        {
-            new KeyboardButton[]{ "↩️Cancel"},
-            //new KeyboardButton[]{ "🔙Back" }
-        })
-        {
-            ResizeKeyboard = true
-        };
-
-        
 
         public async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken ct)
         {
@@ -89,40 +51,25 @@ namespace tg_bot.Handlers
             var TaskId = update.Message.Chat.Id;
             var text = update.Message.Text;
 
-            var state = _db.UserStates.FirstOrDefault(s => s.UserId == ChatId);
+            //var state = _db.UserStates.FirstOrDefault(s => s.UserId == ChatId);
+            var state = await _redis.GetUserStateAsync(ChatId);
 
-            if (text == "↩️Cancel")
+
+            if (text == "↩️Cancel" || text == "🔙Back")
             {
-                state.IsAwaitingTime = false;
-                state.IsAwaitingText = false;
-                state.IsAwaitingProject = false;
-                state.IsAwaitingTaskDelete = false;
-                state.IsAwaitingProjectDelete = false;
+                state.CurrentState = UserStateType.None;
+                state.TempText = null;
+                state.TempProject = null;
+                state.TempPurchase = null;
 
                 await _db.SaveChangesAsync(ct);
-
-                //await bot.SendTextMessageAsync(ChatId, "↩️Canceled:", replyMarkup: MainMenu, cancellationToken: ct);
-
-                switch (state.CurrentSection)
-                {
-                    case "Projects":
-                        await bot.SendTextMessageAsync(ChatId, "📁Projects", replyMarkup: SectionProjects);
-                     return;
-
-                    case "Tasks":
-                        await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks);
-                    return;
-
-                    //case "Notifications":
-                    //  await bot.SendTextMessageAsync(ChatId, "Projects:", replyMarkup: SectionProjects);
-                    //return;
-
-                    default:
-                        await bot.SendTextMessageAsync(ChatId, "Main menu", replyMarkup: MainMenu);
-                        return;
-                }
-                
-
+                await bot.SendTextMessageAsync(
+                ChatId,
+                "Main menu:",
+                replyMarkup: MainMenu,
+                cancellationToken: ct
+                );
+                return;
             }
 
             if (state == null)
@@ -130,33 +77,39 @@ namespace tg_bot.Handlers
                 state = new UserState
                 {
                     UserId = ChatId,
-                    IsAwaitingText = false,
-                    IsAwaitingTime = false,
-                    IsAwaitingProject = false,
+                    CurrentState = UserStateType.None,
+                    CurrentSection = "Main",
                     TempText = null,
-                    TempProject = null
+                    TempProject = null,
+                    TempPurchase = null
                 };
 
-                _db.UserStates.Add(state);
-
-                await _db.SaveChangesAsync(ct);
+                //_db.UserStates.Add(state);
+                await _redis.SetUserStateAsync(state);
+                //await _db.SaveChangesAsync(ct);
             }
 
+
+
+
+
             // WAITING FOR TASK TEXT
-            if (state.IsAwaitingText)
+            // 
+            if (state.CurrentState == UserStateType.AwaitingTaskText)
             {
                 state.TempText = text;
-                state.IsAwaitingText = false;
-                state.IsAwaitingTime = true;
 
+                state.CurrentState = UserStateType.AwaitingTaskTime;
                 await _db.SaveChangesAsync(ct);
-
                 await bot.SendTextMessageAsync(ChatId, "Enter the time:", cancellationToken: ct);
+
+
+
                 return;
             }
 
             // WAITING FOR TASK TIME
-            if (state.IsAwaitingTime)
+            if (state.CurrentState == UserStateType.AwaitingTaskTime)
             {
                 if (DateTime.TryParse(text, out DateTime parsedTime))
                 {
@@ -172,7 +125,7 @@ namespace tg_bot.Handlers
 
                     var savedText = state.TempText;
 
-                    state.IsAwaitingTime = false;
+                    //state.IsAwaitingTime = false;
                     state.TempText = null;
 
                     await _db.SaveChangesAsync(ct);
@@ -182,21 +135,17 @@ namespace tg_bot.Handlers
                         $"Task '{savedText}' saved for {reminderDate:t}",
                         cancellationToken: ct
                     );
+                    state.CurrentState = UserStateType.None;
                 }
 
                 return;
             }
 
+
+
             // WAITING FOR PROJECT NAME
-            if (state.IsAwaitingProject)
+            if (state.CurrentState == UserStateType.AwaitingProjectName)
             {
-                //if (text == "🔙Back" || text == "/back")
-                //{
-                   // state.IsAwaitingProject = false;
-                    //await _db.SaveChangesAsync(ct);
-                   // await bot.SendTextMessageAsync(ChatId, "📁Projects", replyMarkup: SectionProjects, cancellationToken: ct);
-                   // return;
-                //}
                 _db.UserProjects.Add(new UserProject
                 {
                     UserId = ChatId,
@@ -204,8 +153,9 @@ namespace tg_bot.Handlers
                 });
                 await _db.SaveChangesAsync(ct);
 
-                state.IsAwaitingProject = false;
+                state.CurrentState = UserStateType.None;
                 state.TempProject = null;
+
 
                 await _db.SaveChangesAsync(ct);
 
@@ -213,7 +163,29 @@ namespace tg_bot.Handlers
                 return;
             }
 
-            if (state.IsAwaitingTaskDelete)
+            //WAITING FOR PURCHASE NAME
+
+            if (state.CurrentState == UserStateType.AwaitingPurchaseName)
+            {
+                _db.UserPurchases.Add(new UserPurchase
+                {
+                    UserId = ChatId,
+                    Text = text
+                });
+                await _db.SaveChangesAsync(ct);
+
+                state.CurrentState = UserStateType.None;
+                state.TempPurchase = null;
+
+
+                await _db.SaveChangesAsync(ct);
+
+                await bot.SendTextMessageAsync(ChatId, $"Purchase '{text}' saved!", cancellationToken: ct);
+                return;
+            }
+
+            //DELETING
+            if (state.CurrentState == UserStateType.AwaitingTaskDelete)
             {
                 if (int.TryParse(text, out int taskNumber))
                 {
@@ -230,7 +202,8 @@ namespace tg_bot.Handlers
                         await _db.SaveChangesAsync(ct);
 
                         // отключаем состояние
-                        state.IsAwaitingTaskDelete = false;
+                        //state.IsAwaitingTaskDelete = false;
+                        state.CurrentState = UserStateType.None;
                         await _db.SaveChangesAsync(ct);
 
                         await bot.SendTextMessageAsync(ChatId,
@@ -243,13 +216,6 @@ namespace tg_bot.Handlers
                             "Invalid task number.",
                             cancellationToken: ct);
                     }
-                    //if (text == "🔙Back" || text == "/back")
-                    //{
-                      //  state.IsAwaitingProject = false;
-                        //await _db.SaveChangesAsync(ct);
-                        //await bot.SendTextMessageAsync(ChatId, "📁Projects", replyMarkup: SectionProjects, cancellationToken: ct);
-                        //return;
-                    //}
 
 
                 }
@@ -259,38 +225,83 @@ namespace tg_bot.Handlers
                         "Please enter a valid number.",
                         cancellationToken: ct);
                 }
-
-                
-                    return;
+                return;
             }
-                if (state.IsAwaitingProjectDelete)
+            if (state.CurrentState == UserStateType.AwaitingProjectDelete)
+            {
+                if (int.TryParse(text, out int projectNumber))
                 {
-                    if (int.TryParse(text, out int projectNumber))
+                    var projects = _db.UserProjects
+                        .Where(x => x.UserId == ChatId)
+                        .OrderBy(x => x.ProjectId)
+                        .ToList();
+
+                    if (projectNumber >= 1 && projectNumber <= projects.Count)
                     {
-                        var projects = _db.UserProjects
+                        var projectToDelete = projects[projectNumber - 1];
+
+                        _db.UserProjects.Remove(projectToDelete);
+                        await _db.SaveChangesAsync(ct);
+
+                        // отключаем состояние
+                        state.CurrentState = UserStateType.None;
+
+                        //state.IsAwaitingProjectDelete = false;
+                        await _db.SaveChangesAsync(ct);
+
+                        await bot.SendTextMessageAsync(ChatId,
+                            "Project deleted successfully!",
+                            cancellationToken: ct);
+                    }
+                    else
+                    {
+                        await bot.SendTextMessageAsync(ChatId,
+                            "Invalid project number.",
+                            cancellationToken: ct);
+                    }
+                }
+                else
+                {
+                    await bot.SendTextMessageAsync(ChatId,
+                        "Please enter a valid number.",
+                        cancellationToken: ct);
+                }
+
+                return;
+
+                //DELETING PURCHASES
+
+                if (state.CurrentState == UserStateType.AwaitingPurchaseDelete)
+                {
+                    if (int.TryParse(text, out int purchaseNumber))
+                    {
+                        var purchase = _db.UserPurchases
                             .Where(x => x.UserId == ChatId)
-                            .OrderBy(x => x.ProjectId)
+                            .OrderBy(x => x.PurchaseId)
                             .ToList();
 
-                        if (projectNumber >= 1 && projectNumber <= projects.Count)
+                        if (purchaseNumber >= 1 && purchaseNumber <= purchase.Count)
                         {
-                            var projectToDelete = projects[projectNumber - 1];
+                            //ошибка при удалении!!!!!!
+                            var purchaseToDelete = purchase[purchaseNumber - 1];
 
-                            _db.UserProjects.Remove(projectToDelete);
+                            _db.UserPurchases.Remove(purchaseToDelete);
                             await _db.SaveChangesAsync(ct);
 
                             // отключаем состояние
-                            state.IsAwaitingProjectDelete = false;
+                            state.CurrentState = UserStateType.None;
+
+                            //state.IsAwaitingProjectDelete = false;
                             await _db.SaveChangesAsync(ct);
 
                             await bot.SendTextMessageAsync(ChatId,
-                                "Project deleted successfully!",
+                                "Purchase deleted successfully!",
                                 cancellationToken: ct);
                         }
                         else
                         {
                             await bot.SendTextMessageAsync(ChatId,
-                                "Invalid project number.",
+                                "Invalid number.",
                                 cancellationToken: ct);
                         }
                     }
@@ -301,17 +312,11 @@ namespace tg_bot.Handlers
                             cancellationToken: ct);
                     }
 
-               //if (text == "🔙Back" || text == "/back")
-                //{
-                    //state.IsAwaitingProject = false;
-                    //await _db.SaveChangesAsync(ct);
-                    //await bot.SendTextMessageAsync(ChatId, "📁Projects", replyMarkup: SectionProjects, cancellationToken: ct);
-                    //return;
-                //}
-                return;
+                    return;
 
                 }
-                
+            }
+
 
                 // MAIN SWITCH
                 switch (text)
@@ -326,14 +331,17 @@ namespace tg_bot.Handlers
 
                         await bot.SendTextMessageAsync(ChatId, "📋Tasks", replyMarkup: SectionTasks, cancellationToken: ct);
                         return;
-
+                    ///////////23.11.25
                     case "📝Create task":
-                        await bot.SendTextMessageAsync(ChatId, "📝Create task:", replyMarkup: cancelKeyboardMarkup,  cancellationToken: ct);
-                        state.IsAwaitingText = true;
-                        state.IsAwaitingTime = false;
+                        state.CurrentState = UserStateType.AwaitingTaskText;
+
                         state.TempText = null;
+
                         await _db.SaveChangesAsync(ct);
-                        break;
+
+                        await bot.SendTextMessageAsync(ChatId, "📝Create task:", replyMarkup: cancelKeyboardMarkup, cancellationToken: ct);
+                        ;
+                        return;
 
                     case "🎯My tasks":
                         var userTasks = _db.UserMessages
@@ -353,9 +361,10 @@ namespace tg_bot.Handlers
                         }
                         else
                         {
+
                             var sb = new StringBuilder("Your tasks:\n\n");
                             foreach (var task in userTasks)
-                                sb.AppendLine($"{task.TaskId}.*[{task.Time:t}]* - {task.Text}");
+                                sb.AppendLine($"{task.TaskId}.*[{task.Time:t}]*.{task.DueDate} - {task.Text}");
 
                             await bot.SendTextMessageAsync(ChatId, sb.ToString(),
                                 parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown, cancellationToken: ct);
@@ -364,28 +373,23 @@ namespace tg_bot.Handlers
                         break;
 
                     case "📁Projects":
-                    state.CurrentSection = "Projects";
-                    await _db.SaveChangesAsync(ct);
+                        state.CurrentSection = "Projects";
+                        await _db.SaveChangesAsync(ct);
 
-                    await bot.SendTextMessageAsync(ChatId, "📁Projects", replyMarkup: SectionProjects, cancellationToken: ct);
-                            
-                    return;
+                        await bot.SendTextMessageAsync(ChatId, "📁Projects", replyMarkup: SectionProjects, cancellationToken: ct);
 
-                    //case "↩️Cancel":
-                        //state.CurrentSection = "Projects";
-                        //await _db.SaveChangesAsync(ct);
-                        //await bot.SendTextMessageAsync(ChatId, "📁Projects", replyMarkup: SectionProjects, cancellationToken: ct);
+                        return;
 
-                    //break;
 
-                case "➕Create projects":
-                        state.IsAwaitingProject = true;
+                    case "➕Create projects":
+                        state.CurrentState = UserStateType.AwaitingProjectName;
+                        state.TempProject = null;
+
                         await _db.SaveChangesAsync(ct);
 
                         await bot.SendTextMessageAsync(ChatId, "Enter project name:", replyMarkup: cancelKeyboardMarkup, cancellationToken: ct);
-                        
-                        state.TempProject = null;
-                        await _db.SaveChangesAsync(ct);
+
+
                         return;
 
                     case "📒My Projects":
@@ -413,62 +417,104 @@ namespace tg_bot.Handlers
                         }
                         break;
 
-                    //case "↩️Cancel":
-                    //if(state.CurrentSection == "Projects")
-                    //{
-                        //await bot.SendTextMessageAsync(ChatId, "Projects:", replyMarkup: SectionProjects, cancellationToken: ct);
-                    //}
-                   // else if (state.CurrentSection == "Task")
-                    //{
-                      //  await bot.SendTextMessageAsync(ChatId, "Tasks:", replyMarkup: SectionTasks, cancellationToken: ct);
-                    //}
-                    //else
-                    //{
-                    //    await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
-                    //}
-                        
-                        //break;
 
-                case "🔙Back":
-                    //state.CurrentSection = "Projects";
-                    //await _db.SaveChangesAsync(ct);
-                    await bot.SendTextMessageAsync(ChatId, "Main menu:", replyMarkup: MainMenu, cancellationToken: ct);
-                    break;
+                    //case "🔙Back":
+                    case "↩️Cancel":
+                        state.CurrentState = UserStateType.None;
 
-                case "❌Delete task":
-                    state.IsAwaitingTaskDelete = true;
-                    
-                    await _db.SaveChangesAsync(ct);
-                    //var deletingTask = _db.UserMessages
-                    //.All(x => x.UserId == ChatId);
-                    //state.IsAwaitingTaskDelete = true;
-                    await bot.SendTextMessageAsync(ChatId, "Enter the number task for deleting:", replyMarkup: cancelKeyboardMarkup, cancellationToken: ct);
-                    break;
+                        await _db.SaveChangesAsync(ct);
 
-                case "❌Delete project":
-                    state.IsAwaitingProjectDelete = true;
-                    //await bot.SendTextMessageAsync(ChatId, "Enter the number project for deleting:", cancellationToken: ct);
-                    await _db.SaveChangesAsync(ct);
-                    //var deletingProject = _db.UserMessages
-                    //.All(x => x.UserId == ChatId);
-                    //state.IsAwaitingProjectDelete = true;
-                    await bot.SendTextMessageAsync(ChatId, "Enter the number task for deleting:", replyMarkup: cancelKeyboardMarkup, cancellationToken: ct);
-                    break;
+                        await bot.SendTextMessageAsync(
+                            ChatId,
+                            "Main menu:",
+                            replyMarkup: MainMenu,
+                            cancellationToken: ct
+                            );
+                        return;
 
-                case "🔔Notifications":
-                    await bot.SendTextMessageAsync(ChatId, "🚧This section is under development 🚧", replyMarkup: SectionNotifications, cancellationToken: ct);
+                    case "❌Delete task":
+                        //state.IsAwaitingTaskDelete = true;
 
-                    break;
+                        await _db.SaveChangesAsync(ct);
 
-                //case "On":
+                        await bot.SendTextMessageAsync(ChatId, "Enter the number task for deleting:", replyMarkup: cancelKeyboardMarkup, cancellationToken: ct);
+                        break;
+
+                    case "❌Delete project":
+                        //state.IsAwaitingProjectDelete = true;
+
+                        await _db.SaveChangesAsync(ct);
+
+                        await bot.SendTextMessageAsync(ChatId, "Enter the number task for deleting:", replyMarkup: cancelKeyboardMarkup, cancellationToken: ct);
+                        break;
+
+                    case "🔔Notifications":
+                        await bot.SendTextMessageAsync(ChatId, "🚧Section is under development 🚧", replyMarkup: SectionNotifications, cancellationToken: ct);
+
+                        break;
+
+                    //case "On":
                     //await bot.SendTextMessageAsync(ChatId, "🚧This section is under development 🚧", replyMarkup: MainMenu, cancellationToken: ct);
                     //break;
+                    case "🛍Shopping list":
+                        state.CurrentSection = "SectionShopping";
+                        await _db.SaveChangesAsync(ct);
 
-                default:
+                        await bot.SendTextMessageAsync(ChatId, "🛍Shopping list", replyMarkup: SectionShopping, cancellationToken: ct);
+
+                        return;
+
+                    case "➕Add purchases":
+                        state.CurrentState = UserStateType.AwaitingPurchaseName;
+                        state.TempPurchase = null;
+
+                        await _db.SaveChangesAsync(ct);
+
+                        await bot.SendTextMessageAsync(ChatId, "Add new purchase:", replyMarkup: cancelKeyboardMarkup, cancellationToken: ct);
+
+
+                        return;
+
+                    case "📝My purchases":
+                        var userPurchases = _db.UserPurchases
+                            .Where(p => p.UserId == ChatId)
+                            .OrderBy(p => p.Id)
+                            .ToList();
+                        for (int i = 0; i < userPurchases.Count; i++)
+                        {
+                            userPurchases[i].PurchaseId = i + 1;
+                        }
+                        await _db.SaveChangesAsync(ct);
+
+                        if (!userPurchases.Any())
+                        {
+                            await bot.SendTextMessageAsync(ChatId, "You don't have purchases.", cancellationToken: ct);
+                        }
+                        else
+                        {
+                            var sb = new StringBuilder("Your list:\n\n");
+                            foreach (var p in userPurchases)
+                                sb.AppendLine($"{p.PurchaseId}.{p.Text}");
+
+                            await bot.SendTextMessageAsync(ChatId, sb.ToString(), cancellationToken: ct);
+                        }
+                        break;
+
+                    case "❌Delete purchases":
+
+                        await _db.SaveChangesAsync(ct);
+
+                        await bot.SendTextMessageAsync(ChatId, "Enter the number of purchase for deleting:", replyMarkup: cancelKeyboardMarkup, cancellationToken: ct);
+                        break;
+
+                    //"📝My purchases", "➕Add purchases", "❌Delete purchases"
+                    default:
                         await bot.SendTextMessageAsync(ChatId, "Unknown command", cancellationToken: ct);
                         break;
-                }
+                
             }
+        }
+        
         
 
         public Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct)
@@ -481,6 +527,40 @@ namespace tg_bot.Handlers
 
 
 /*
+ * 
+ * /*
+            if (state.IsAwaitingDate)
+            {
+                if (DateTime.TryParse(text, out DateTime dueDate))
+                {
+                    // сохраняем дату в последнюю созданную задачу
+                    var task = _db.UserMessages
+                        .Where(x => x.UserId == ChatId)
+                        .OrderByDescending(x => x.Time)
+                        .FirstOrDefault();
+
+                    if (task != null)
+                    {
+                        task.DueDate = dueDate;
+                        await _db.SaveChangesAsync(ct);
+
+                        await bot.SendTextMessageAsync(ChatId,
+                            $"Task due date set: {dueDate:yyyy-MM-dd}",
+                            cancellationToken: ct);
+                    }
+
+                    state.IsAwaitingDate = false;
+                    await _db.SaveChangesAsync(ct);
+                }
+                else
+                {
+                    await bot.SendTextMessageAsync(ChatId,
+                        "Invalid date format. Please enter YYYY-MM-DD.",
+                        cancellationToken: ct);
+                }
+                return; // останавливаем дальнейшую обработку сообщений
+            }
+            
 namespace tg_bot.Handlers
 {
     public class BotHandlers

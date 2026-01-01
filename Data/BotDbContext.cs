@@ -18,6 +18,8 @@ namespace tg_bot.Data
 
         public DbSet<UserProject> UserProjects { get; set; }
 
+        public DbSet<UserPurchase> UserPurchases { get; set; }
+
         public BotDbContext(DbContextOptions<BotDbContext> options)
             : base(options)
         {
@@ -33,6 +35,9 @@ namespace tg_bot.Data
                 .HasKey(e => e.Id);
 
             modelBuilder.Entity<UserProject>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<UserPurchase>()
                 .HasKey(e => e.Id);
 
         }
