@@ -18,7 +18,7 @@ services:
     environment:
       POSTGRES_DB: telegram_bot
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1243657182cakeXz!
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
