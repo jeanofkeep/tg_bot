@@ -50,7 +50,7 @@ namespace tg_bot.Services
             {
                 await _bot.SendTextMessageAsync(
                     task.UserId,
-                    $"🔔 Reminder: {task.Text}\n🕐 {task.TaskDateTime.ToLocalTime():dd.MM HH:mm}",
+                    $"🔔 Reminder: {task.Text}\n🕐 {taskDateTime:dd.MM HH:mm}",
                     cancellationToken: ct
                 );
 

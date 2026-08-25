@@ -62,12 +62,15 @@ namespace tg_bot.Handlers
                     await bot.SendTextMessageAsync(chatId, "Date was not set. Please try again.");
                     return;
                 }
+
+                var moscowZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
                 var taskDateTime = state.TempDate.Value.Date + parsedTime;
+                var taskDateTimeUtc = TimeZoneInfo.ConvertTimeToUtc(taskDateTime, moscowZone);
                 _db.UserMessages.Add(new UserMessage
                 {
                     UserId = chatId,
                     Text = state.TempText ?? "No description",
-                    TaskDateTime = taskDateTime.ToUniversalTime(),
+                    TaskDateTime = taskDateTimeUtc,
                     ReminderDateTime = DateTime.UtcNow
                 });
                 await _db.SaveChangesAsync(ct);
