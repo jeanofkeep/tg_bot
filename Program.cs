@@ -32,9 +32,10 @@ namespace tg_bot
             Console.WriteLine($"Current directory: {Directory.GetCurrentDirectory()}");
 
             //postgres
+	    
 
             var options = new DbContextOptionsBuilder<BotDbContext>()
-                .UseNpgsql("Host=postgres;Port=5432;Database=telegram_bot;Username=postgres;Password=12345678")
+                .UseNpgsql("Host=postgres;Port=5432;Database=telegram_bot;Username=postgres;Password=123456782")
                 .Options;
 
             //redis
@@ -46,31 +47,9 @@ namespace tg_bot
             var redisConnection = ConnectionMultiplexer.Connect("redis:6379");;
             var redisService = new RedisService(redisConnection);
 
-            //var redisConnection = ConnectionMultiplexer.Connect(options);
-
-             
-
-
 
             using var db = new BotDbContext(options);
 
-
-            
-
-            
-
-
-            /*
-            if (await db.Database.CanConnectAsync())
-            {
-                Console.WriteLine("Database is available.");
-            }
-            else
-            {
-                Console.WriteLine("Cannot connect to database. Please check connection string and server.");
-                return;
-            }
-            */
 
             db.Database.EnsureCreated();
 
@@ -86,7 +65,10 @@ namespace tg_bot
             var me = await bot.GetMeAsync();
 
             var handler = new BotHandlers(db, redisService);
-            using var cts = new CancellationTokenSource();
+	    using var cts = new CancellationTokenSource();
+
+            var notificationService = new NotificationService(options, bot);
+            _ = notificationService.StartAsync(cts.Token);
 
             bot.StartReceiving(
                 handler.HandleUpdateAsync,

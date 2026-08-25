@@ -11,7 +11,8 @@ namespace tg_bot.Keyboards
     {
         public static ReplyKeyboardMarkup MainMenu = new(new[]
         {
-            new KeyboardButton[]{ "📋Tasks", "📁Projects", "🛍Shopping list","🔔Notifications" }
+            new KeyboardButton[]{ "📋Tasks", "📁Projects", "🛍Shopping list" },
+	    new KeyboardButton[]{ "🔔Notifications" }
         })
         {
             ResizeKeyboard = true

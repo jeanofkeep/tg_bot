@@ -13,12 +13,12 @@ services:
 
   postgres:
     image: postgres:15
-    container_name: postgres
+    container_name: tg_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: telegram_bot
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 12345678
+      POSTGRES_PASSWORD: 1243657182cakeXz!
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:

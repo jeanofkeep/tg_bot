@@ -15,8 +15,10 @@ namespace tg_bot.Models
         public long UserId { get; set; }
         public string? Username { get; set; }
         public string Text { get; set; } = "";
-        public DateTime Date { get; set; }
-        public DateTime Time { get; set; }
+        //public DateTime Date { get; set; }
+        //public DateTime Time { get; set; }
+        public bool IsNotified { get; set; } = false;
+        public DateTime TaskDateTime { get; set; }
         public DateTime? ReminderDateTime { get; set; }
         public DateTime? DueDate { get; set; }
 
@@ -37,7 +39,7 @@ namespace tg_bot.Models
         public string CurrentSection { get; set; } = "MainMenu";
         //public bool IsAwaitingDate { get; set; }
         public UserStateType CurrentState { get; set; } = UserStateType.None;
-
+        public DateTime? TempDate { get; set; }
     }
 
     public class UserProject
