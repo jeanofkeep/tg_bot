@@ -20,6 +20,8 @@ jobs:
           script: |
             git config --global --add safe.directory /root/tg_bots/bot_taskss
             cd ~/tg_bots/bot_taskss
-            git pull origin master
+            git fetch --all
+            git reset --hard origin/master
             docker compose down
+            docker builder prune -f
             docker compose up --build -d
