@@ -48,8 +48,11 @@ namespace tg_bot.Services
 
             foreach (var task in tasksDue)
             {
+                var moscowZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Moscow");
+                var localTime = TimeZoneInfo.ConvertTimeFromUtc(task.TaskDateTime, moscowZone);
+
                 await _bot.SendTextMessageAsync(
-                    task.UserId,
+                    task.UserId,           
                     $"🔔 Reminder: {task.Text}\n🕐 {taskDateTime:dd.MM HH:mm}",
                     cancellationToken: ct
                 );
